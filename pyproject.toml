@@ -1,0 +1,27 @@
+[project]
+name = "bi-analyst"
+version = "0.1.0"
+description = "Autonomous multi-agent BI analyst: NL question -> validated SQL -> analysis -> insight"
+requires-python = ">=3.10"
+dependencies = [
+  "langgraph>=0.2",
+  "sqlalchemy>=2.0",
+  "sqlglot>=25",
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "anthropic>=0.40",
+  "openai>=1.30",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
