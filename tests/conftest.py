@@ -13,7 +13,8 @@ def demo_db(tmp_path_factory):
 
 @pytest.fixture()
 def settings(demo_db, tmp_path):
-    return Settings(db_url=demo_db, trace_dir=str(tmp_path / "traces"))
+    # router off by default so existing tests exercise the single-question path
+    return Settings(db_url=demo_db, trace_dir=str(tmp_path / "traces"), enable_router=False)
 
 
 @pytest.fixture()

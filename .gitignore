@@ -4,3 +4,6 @@ __pycache__/
 traces/
 data/demo.db
 .env
+.pytest_cache/
+eval/results/*.partial.jsonl
+data/saas.db
