@@ -28,9 +28,12 @@ class Settings:
     provider: str = field(default_factory=lambda: os.getenv("BI_PROVIDER", "anthropic").lower())
     model: str = field(default_factory=lambda: os.getenv("BI_MODEL", "claude-sonnet-5-5"))
     base_url: str | None = field(default_factory=lambda: os.getenv("BI_BASE_URL") or None)
+    max_tokens: int = field(default_factory=lambda: int(os.getenv("BI_MAX_TOKENS", "4096")))
     api_key: str | None = field(default_factory=lambda: os.getenv("BI_API_KEY") or None)
     max_attempts: int = 3          # SQL generation attempts (1 initial + corrections)
     max_rows: int = 500            # hard cap on rows pulled back
     query_timeout_s: float = 10.0  # per-query execution timeout
     trace_dir: str = field(default_factory=lambda: os.getenv("BI_TRACE_DIR", "traces"))
     schema_top_k: int = 6          # tables kept by schema linking
+    enable_router: bool = field(default_factory=lambda: os.getenv("BI_ENABLE_ROUTER", "1") != "0")
+    max_sub_questions: int = 4     # cap on how many sub-questions the router may create

@@ -6,7 +6,7 @@ from typing import Any
 from .config import Settings
 from .db import Database
 from .graph import Deps, build_graph
-from .llm import LLM, make_llm
+from .llm import LLM, make_llm, usage_scope
 from .tracing import Tracer
 
 
@@ -23,11 +23,17 @@ class BIAnalyst:
 
     def ask(self, question: str) -> dict[str, Any]:
         trace_id = uuid.uuid4().hex[:12]
-        out = self._graph.invoke({"question": question, "trace_id": trace_id})
+        with usage_scope() as usage:
+            out = self._graph.invoke({"question": question, "trace_id": trace_id})
         return {
             "trace_id": trace_id,
+            "usage": usage.summary(),
             "status": out.get("status", "failed"),
             "question": question,
+            "route": out.get("route", "simple"),
+            "sub_questions": out.get("sub_questions", [question]),
+            "sub_results": out.get("sub_results", []),
+            "primary_index": out.get("primary_index", 1),
             "plan": out.get("plan"),
             "sql": out.get("sql"),
             "attempts": out.get("attempts", 0),

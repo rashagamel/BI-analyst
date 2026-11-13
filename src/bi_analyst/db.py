@@ -58,7 +58,9 @@ class QueryResult:
 
 def _jsonable(v: Any) -> Any:
     if isinstance(v, decimal.Decimal):
-        return float(v)
+        return round(float(v), 6)
+    if isinstance(v, float):
+        return round(v, 6)  # removes float noise such as 57297.200000000004
     if isinstance(v, (dt.date, dt.datetime)):
         return v.isoformat()
     if isinstance(v, bytes):
