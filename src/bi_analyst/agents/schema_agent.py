@@ -4,6 +4,8 @@ import re
 
 from ..db import SchemaInfo
 
+FX_HINT = re.compile(r"usd|currenc|convert|exchange|\bfx\b", re.I)
+
 
 def _tokens(text: str) -> set[str]:
     return {w.rstrip("s") for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) > 2}
@@ -36,4 +38,8 @@ def link_schema(question: str, schema: SchemaInfo, top_k: int = 6) -> list[str]:
         for other in schema.tables.values():
             if any(ref == name for _, ref, _ in other.fks) and other.name not in selected:
                 selected.append(other.name)
+
+    # currency questions need the exchange-rate table (it joins on a text column, not an FK)
+    if FX_HINT.search(question) and "fx_rates" in schema.tables and "fx_rates" not in selected:
+        selected.append("fx_rates")
     return selected
