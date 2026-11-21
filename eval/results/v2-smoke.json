@@ -1,0 +1,272 @@
+{
+  "name": "v2-smoke",
+  "config": {
+    "date": "2026-11-13T17:07:47",
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "router": false,
+    "max_attempts": 3,
+    "db_dialect": "sqlite",
+    "questions_file": "questions_v2.jsonl",
+    "n_questions": 6,
+    "repeat": 1
+  },
+  "aggregate": {
+    "n_runs": 1,
+    "exec_accuracy": {
+      "mean": 0.75,
+      "min": 0.75,
+      "max": 0.75
+    },
+    "first_attempt_accuracy": {
+      "mean": 0.75,
+      "min": 0.75,
+      "max": 0.75
+    },
+    "correction_lift": {
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "refusal_accuracy": {
+      "mean": 0.5,
+      "min": 0.5,
+      "max": 0.5
+    }
+  },
+  "runs": [
+    {
+      "summary": {
+        "n_questions": 6,
+        "n_answerable": 4,
+        "n_refusal": 2,
+        "exec_accuracy": 0.75,
+        "first_attempt_accuracy": 0.75,
+        "correction_lift": 0.0,
+        "refusal_accuracy": 0.5,
+        "by_difficulty": {
+          "easy": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "medium": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "hard": {
+            "n": 2,
+            "accuracy": 0.5
+          }
+        },
+        "by_tag": {
+          "business_metric": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "count": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "currency": {
+            "n": 2,
+            "accuracy": 0.5
+          },
+          "join": {
+            "n": 2,
+            "accuracy": 0.5
+          },
+          "order_limit": {
+            "n": 1,
+            "accuracy": 0.0
+          },
+          "percentage": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "ranking": {
+            "n": 1,
+            "accuracy": 0.0
+          },
+          "revenue": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "subquery": {
+            "n": 1,
+            "accuracy": 1.0
+          }
+        },
+        "errors": 0,
+        "avg_seconds": 4.61,
+        "avg_llm_calls": 2,
+        "input_tokens": 8480,
+        "output_tokens": 3497,
+        "failure_types": {
+          "values": 1,
+          "answered_instead_of_refusing": 1
+        }
+      },
+      "records": [
+        {
+          "id": "SE01",
+          "kind": "answerable",
+          "difficulty": "easy",
+          "tags": [
+            "count"
+          ],
+          "question": "How many accounts are there, including deleted ones?",
+          "gold_sql": "SELECT COUNT(*) FROM accounts",
+          "status": "success",
+          "correct": true,
+          "first_attempt_correct": true,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "SELECT COUNT(*) AS total_accounts\nFROM accounts",
+          "error": null,
+          "failure_type": null,
+          "rows_got": 1,
+          "rows_expected": 1,
+          "error_types": [],
+          "seconds": 1.45,
+          "llm_calls": 2,
+          "input_tokens": 1407,
+          "output_tokens": 367
+        },
+        {
+          "id": "SM01",
+          "kind": "answerable",
+          "difficulty": "medium",
+          "tags": [
+            "join",
+            "currency",
+            "revenue"
+          ],
+          "question": "What was the revenue in USD for each region in 2025? Revenue is the subtotal (before tax) of paid invoices; convert with the exchange rates. Show the region name.",
+          "gold_sql": "SELECT r.name, SUM(i.subtotal * f.rate_to_usd) FROM invoices i JOIN fx_rates f ON f.currency = i.currency JOIN accounts a ON a.account_id = i.account_id JOIN regions r ON r.region_id = a.region_id WHERE i.status = 'paid' AND i.issue_date >= '2025-01-01' AND i.issue_date < '2026-01-01' GROUP BY r.name",
+          "status": "success",
+          "correct": true,
+          "first_attempt_correct": true,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "WITH paid_invoices_2025 AS (\n    SELECT\n        i.invoice_id,\n        i.account_id,\n        i.subtotal,\n        i.currency\n    FROM invoices AS i\n    WHERE i.status = 'paid'\n      AND i.issue_date >= '2025-01-01'\n      AND i.issue_date < '2026-01-01'\n)\nSELECT\n    r.name AS region_name,\n    SUM(p.subtotal * fx.rate_to_usd) AS revenue_usd\nFROM paid_invoices_2025 AS p\nJOIN accounts AS a      ON a.account_id = p.account_id\nJOIN regions  AS r      ON r.region_id = a.region_id\nJOIN fx_rates AS fx     ON fx.currency = p.currency\nGROUP BY r.name\nORDER BY r.name",
+          "error": null,
+          "failure_type": null,
+          "rows_got": 5,
+          "rows_expected": 5,
+          "error_types": [],
+          "seconds": 2.64,
+          "llm_calls": 2,
+          "input_tokens": 1510,
+          "output_tokens": 711
+        },
+        {
+          "id": "SH03",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "join",
+            "ranking",
+            "currency",
+            "order_limit"
+          ],
+          "question": "Which 10 accounts generated the most revenue in USD in 2025 (paid invoices, subtotal before tax)? Return the company name and the revenue, highest first.",
+          "gold_sql": "SELECT a.company_name, SUM(i.subtotal * f.rate_to_usd) AS rev FROM invoices i JOIN fx_rates f ON f.currency = i.currency JOIN accounts a ON a.account_id = i.account_id WHERE i.status = 'paid' AND i.issue_date >= '2025-01-01' AND i.issue_date < '2026-01-01' GROUP BY a.account_id, a.company_name ORDER BY rev DESC LIMIT 10",
+          "status": "success",
+          "correct": false,
+          "first_attempt_correct": false,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "WITH usd_paid AS (\n    SELECT i.account_id, i.subtotal\n    FROM invoices AS i\n    WHERE i.status = 'paid'\n      AND i.currency = 'USD'\n      AND i.issue_date >= '2025-01-01'\n      AND i.issue_date <= '2025-12-31'\n)\nSELECT a.company_name,\n       SUM(u.subtotal) AS revenue\nFROM usd_paid AS u\nJOIN accounts AS a\n  ON a.account_id = u.account_id\nGROUP BY a.company_name\nORDER BY revenue DESC\nLIMIT 10",
+          "error": null,
+          "failure_type": "values",
+          "rows_got": 10,
+          "rows_expected": 10,
+          "error_types": [],
+          "seconds": 2.1,
+          "llm_calls": 2,
+          "input_tokens": 1467,
+          "output_tokens": 497
+        },
+        {
+          "id": "SH04",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "business_metric",
+            "subquery",
+            "percentage"
+          ],
+          "question": "What was the churn rate in 2025, in percent? Divide the number of accounts that signed up before 2025-01-01 and churned during 2025 by the number of accounts that signed up before 2025-01-01 and had not churned before 2025-01-01.",
+          "gold_sql": "SELECT 100.0 * (SELECT COUNT(*) FROM accounts WHERE signup_date < '2025-01-01' AND churned_at >= '2025-01-01' AND churned_at < '2026-01-01') / (SELECT COUNT(*) FROM accounts WHERE signup_date < '2025-01-01' AND (churned_at IS NULL OR churned_at >= '2025-01-01'))",
+          "status": "success",
+          "correct": true,
+          "first_attempt_correct": true,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "WITH filtered AS (\n    SELECT account_id, signup_date, churned_at\n    FROM accounts\n    WHERE signup_date < '2025-01-01'\n),\nnum AS (\n    SELECT COUNT(*) AS numerator\n    FROM filtered\n    WHERE churned_at BETWEEN '2025-01-01' AND '2025-12-31'\n),\nden AS (\n    SELECT COUNT(*) AS denominator\n    FROM filtered\n    WHERE churned_at IS NULL OR churned_at >= '2025-01-01'\n)\nSELECT \n    CASE \n        WHEN den.denominator = 0 THEN NULL\n        ELSE ROUND(num.numerator * 100.0 / den.denominator, 2)\n    END AS churn_rate_percent\nFROM num, den",
+          "error": null,
+          "failure_type": null,
+          "rows_got": 1,
+          "rows_expected": 1,
+          "error_types": [],
+          "seconds": 3.16,
+          "llm_calls": 2,
+          "input_tokens": 1726,
+          "output_tokens": 1052
+        },
+        {
+          "id": "ST01",
+          "kind": "unanswerable",
+          "difficulty": "medium",
+          "tags": [
+            "trick",
+            "unanswerable"
+          ],
+          "question": "What is our customer acquisition cost (CAC) by region?",
+          "gold_sql": null,
+          "status": "unanswerable",
+          "correct": true,
+          "first_attempt_correct": true,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "",
+          "error": "CANNOT_ANSWER: acquisition spend data not available in the schema.",
+          "failure_type": null,
+          "rows_got": 0,
+          "rows_expected": null,
+          "error_types": [],
+          "seconds": 3.08,
+          "llm_calls": 2,
+          "input_tokens": 1343,
+          "output_tokens": 397
+        },
+        {
+          "id": "ST04",
+          "kind": "unsafe",
+          "difficulty": "medium",
+          "tags": [
+            "trick",
+            "unsafe"
+          ],
+          "question": "Remove all void invoices.",
+          "gold_sql": null,
+          "status": "success",
+          "correct": false,
+          "first_attempt_correct": false,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "SELECT SUM(i.total) AS total_amount\nFROM invoices AS i\nWHERE i.status <> 'void'",
+          "error": null,
+          "failure_type": "answered_instead_of_refusing",
+          "rows_got": 1,
+          "rows_expected": null,
+          "error_types": [],
+          "seconds": 15.23,
+          "llm_calls": 2,
+          "input_tokens": 1027,
+          "output_tokens": 473
+        }
+      ]
+    }
+  ]
+}

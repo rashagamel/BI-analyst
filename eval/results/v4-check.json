@@ -1,0 +1,206 @@
+{
+  "name": "v4-check",
+  "config": {
+    "date": "2026-11-21T14:41:16",
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "router": false,
+    "max_attempts": 3,
+    "db_dialect": "sqlite",
+    "questions_file": "questions_v2.jsonl",
+    "n_questions": 4,
+    "repeat": 1
+  },
+  "aggregate": {
+    "n_runs": 1,
+    "exec_accuracy": {
+      "mean": 0.25,
+      "min": 0.25,
+      "max": 0.25
+    },
+    "first_attempt_accuracy": {
+      "mean": 0.25,
+      "min": 0.25,
+      "max": 0.25
+    },
+    "correction_lift": {
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "refusal_accuracy": null
+  },
+  "runs": [
+    {
+      "summary": {
+        "n_questions": 4,
+        "n_answerable": 4,
+        "n_refusal": 0,
+        "exec_accuracy": 0.25,
+        "first_attempt_accuracy": 0.25,
+        "correction_lift": 0.0,
+        "refusal_accuracy": null,
+        "by_difficulty": {
+          "easy": {
+            "n": 1,
+            "accuracy": 0.0
+          },
+          "hard": {
+            "n": 3,
+            "accuracy": 0.3333
+          }
+        },
+        "by_tag": {
+          "backlog": {
+            "n": 1,
+            "accuracy": 0.0
+          },
+          "business_metric": {
+            "n": 1,
+            "accuracy": 0.0
+          },
+          "cte": {
+            "n": 2,
+            "accuracy": 0.5
+          },
+          "currency": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "date_math": {
+            "n": 1,
+            "accuracy": 0.0
+          },
+          "join": {
+            "n": 1,
+            "accuracy": 0.0
+          },
+          "ordering": {
+            "n": 1,
+            "accuracy": 0.0
+          },
+          "percentage": {
+            "n": 1,
+            "accuracy": 1.0
+          }
+        },
+        "errors": 0,
+        "avg_seconds": 3.0,
+        "avg_llm_calls": 2,
+        "input_tokens": 6258,
+        "output_tokens": 3776,
+        "failure_types": {
+          "column_count": 1,
+          "values": 2
+        }
+      },
+      "records": [
+        {
+          "id": "SE04",
+          "kind": "answerable",
+          "difficulty": "easy",
+          "tags": [
+            "ordering"
+          ],
+          "question": "List all plans with their per-seat price, cheapest first.",
+          "gold_sql": "SELECT plan_name, list_price FROM plans ORDER BY list_price ASC",
+          "status": "success",
+          "correct": false,
+          "first_attempt_correct": false,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "SELECT\n    p.plan_id,\n    p.plan_name,\n    p.list_price AS per_seat_price\nFROM plans AS p\nORDER BY p.list_price ASC",
+          "error": null,
+          "failure_type": "column_count",
+          "rows_got": 6,
+          "rows_expected": 6,
+          "error_types": [],
+          "seconds": 2.47,
+          "llm_calls": 2,
+          "input_tokens": 1200,
+          "output_tokens": 566
+        },
+        {
+          "id": "SH01",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "business_metric",
+            "join"
+          ],
+          "question": "What is the monthly recurring revenue (MRR) in USD as of 2025-12-31? For each active subscription take seats times the plan's per-seat price after the subscription's discount percentage, and divide annual plans by 12.",
+          "gold_sql": "SELECT SUM(s.seats * p.list_price * (1 - s.discount_pct / 100.0) / CASE WHEN p.billing_period = 'annual' THEN 12.0 ELSE 1.0 END) FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id WHERE s.status = 'active'",
+          "status": "success",
+          "correct": false,
+          "first_attempt_correct": false,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "SELECT \n    ROUND(SUM(\n        s.seats * p.list_price * (1 - s.discount_pct) *\n        CASE WHEN p.billing_period = 'annual' THEN 1.0/12 ELSE 1 END\n    ), 2) AS mrr_usd\nFROM subscriptions AS s\nJOIN plans AS p\n    ON s.plan_id = p.plan_id\nWHERE s.status = 'active'\n  AND s.start_date <= '2025-12-31'\n  AND (s.end_date IS NULL OR s.end_date > '2025-12-31')",
+          "error": null,
+          "failure_type": "values",
+          "rows_got": 1,
+          "rows_expected": 1,
+          "error_types": [],
+          "seconds": 3.24,
+          "llm_calls": 2,
+          "input_tokens": 1766,
+          "output_tokens": 1213
+        },
+        {
+          "id": "SH13",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "cte",
+            "percentage",
+            "currency"
+          ],
+          "question": "What share of 2025 revenue in USD (paid invoices, subtotal before tax) comes from each account segment? Return the segment and the percentage.",
+          "gold_sql": "WITH s AS (SELECT a.segment, SUM(i.subtotal * f.rate_to_usd) AS rev FROM invoices i JOIN fx_rates f ON f.currency = i.currency JOIN accounts a ON a.account_id = i.account_id WHERE i.status = 'paid' AND i.issue_date >= '2025-01-01' AND i.issue_date < '2026-01-01' GROUP BY a.segment) SELECT segment, 100.0 * rev / (SELECT SUM(rev) FROM s) FROM s",
+          "status": "success",
+          "correct": true,
+          "first_attempt_correct": true,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "WITH segment_revenue AS (\n    SELECT \n        a.segment,\n        SUM(i.subtotal * COALESCE(f.rate_to_usd, 1)) AS revenue_usd\n    FROM invoices i\n    JOIN accounts a          ON i.account_id = a.account_id\n    LEFT JOIN fx_rates f     ON i.currency = f.currency\n    WHERE i.status = 'paid'\n      AND i.issue_date >= '2025-01-01'\n      AND i.issue_date <  '2026-01-01'\n    GROUP BY a.segment\n),\ntotal_revenue AS (\n    SELECT SUM(revenue_usd) AS total_usd\n    FROM segment_revenue\n)\nSELECT \n    sr.segment,\n    (sr.revenue_usd / tr.total_usd) * 100 AS percentage\nFROM segment_revenue sr\nCROSS JOIN total_revenue tr\nORDER BY sr.segment",
+          "error": null,
+          "failure_type": null,
+          "rows_got": 3,
+          "rows_expected": 3,
+          "error_types": [],
+          "seconds": 3.01,
+          "llm_calls": 2,
+          "input_tokens": 1766,
+          "output_tokens": 937
+        },
+        {
+          "id": "SH17",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "cte",
+            "date_math",
+            "backlog"
+          ],
+          "question": "For each month-end of 2025, how many tickets were still open, meaning opened on or before that month-end and not closed by then? Return the month as YYYY-MM and the count in chronological order.",
+          "gold_sql": "WITH me(month, e) AS (VALUES ('2025-01','2025-01-31 23:59:59'),('2025-02','2025-02-28 23:59:59'),('2025-03','2025-03-31 23:59:59'),('2025-04','2025-04-30 23:59:59'),('2025-05','2025-05-31 23:59:59'),('2025-06','2025-06-30 23:59:59'),('2025-07','2025-07-31 23:59:59'),('2025-08','2025-08-31 23:59:59'),('2025-09','2025-09-30 23:59:59'),('2025-10','2025-10-31 23:59:59'),('2025-11','2025-11-30 23:59:59'),('2025-12','2025-12-31 23:59:59')) SELECT me.month, COUNT(t.ticket_id) FROM me LEFT JOIN tickets t ON t.opened_at <= me.e AND (t.closed_at IS NULL OR t.closed_at > me.e) GROUP BY me.month ORDER BY me.month",
+          "status": "success",
+          "correct": false,
+          "first_attempt_correct": false,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "WITH RECURSIVE months AS (\n    SELECT date('2025-01-01') AS month_start\n    UNION ALL\n    SELECT date(month_start, '+1 month')\n    FROM months\n    WHERE month_start < '2025-12-01'\n)\nSELECT \n    strftime('%Y-%m', date(month_start, '+1 month', '-1 day')) AS month,\n    COUNT(t.ticket_id) AS open_tickets\nFROM months\nLEFT JOIN tickets t\n    ON t.opened_at <= date(month_start, '+1 month', '-1 day')\n   AND (t.closed_at IS NULL OR t.closed_at > date(month_start, '+1 month', '-1 day'))\nGROUP BY month\nORDER BY month",
+          "error": null,
+          "failure_type": "values",
+          "rows_got": 12,
+          "rows_expected": 12,
+          "error_types": [],
+          "seconds": 3.27,
+          "llm_calls": 2,
+          "input_tokens": 1526,
+          "output_tokens": 1060
+        }
+      ]
+    }
+  ]
+}
