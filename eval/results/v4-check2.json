@@ -1,0 +1,135 @@
+{
+  "name": "v4-check2",
+  "config": {
+    "date": "2026-11-21T14:47:11",
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "router": false,
+    "max_attempts": 3,
+    "db_dialect": "sqlite",
+    "questions_file": "questions_v2.jsonl",
+    "n_questions": 2,
+    "repeat": 1
+  },
+  "aggregate": {
+    "n_runs": 1,
+    "exec_accuracy": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "first_attempt_accuracy": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "correction_lift": {
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "refusal_accuracy": null
+  },
+  "runs": [
+    {
+      "summary": {
+        "n_questions": 2,
+        "n_answerable": 2,
+        "n_refusal": 0,
+        "exec_accuracy": 1.0,
+        "first_attempt_accuracy": 1.0,
+        "correction_lift": 0.0,
+        "refusal_accuracy": null,
+        "by_difficulty": {
+          "hard": {
+            "n": 2,
+            "accuracy": 1.0
+          }
+        },
+        "by_tag": {
+          "backlog": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "business_metric": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "cte": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "date_math": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "join": {
+            "n": 1,
+            "accuracy": 1.0
+          }
+        },
+        "errors": 0,
+        "avg_seconds": 3.53,
+        "avg_llm_calls": 2,
+        "input_tokens": 3372,
+        "output_tokens": 2728,
+        "failure_types": {}
+      },
+      "records": [
+        {
+          "id": "SH01",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "business_metric",
+            "join"
+          ],
+          "question": "What is the monthly recurring revenue (MRR) in USD as of 2025-12-31? For each active subscription take seats times the plan's per-seat price after the subscription's discount percentage, and divide annual plans by 12.",
+          "gold_sql": "SELECT SUM(s.seats * p.list_price * (1 - s.discount_pct / 100.0) / CASE WHEN p.billing_period = 'annual' THEN 12.0 ELSE 1.0 END) FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id WHERE s.status = 'active'",
+          "status": "success",
+          "correct": true,
+          "first_attempt_correct": true,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "WITH active_subs AS (\n    SELECT \n        s.seats,\n        COALESCE(s.discount_pct, 0) AS discount_pct,\n        p.list_price,\n        p.currency,\n        p.billing_period\n    FROM subscriptions AS s\n    JOIN plans AS p\n        ON s.plan_id = p.plan_id\n    WHERE s.status = 'active'\n      AND s.start_date <= '2025-12-31'\n      AND (s.end_date IS NULL OR s.end_date > '2025-12-31')\n)\nSELECT \n    ROUND(SUM(\n        a.seats *\n        a.list_price *\n        COALESCE(fr.rate_to_usd, 1) *\n        (1 - (a.discount_pct / 100.0)) *\n        CASE WHEN a.billing_period = 'annual' THEN 1.0/12 ELSE 1 END\n    ), 2) AS mrr_usd\nFROM active_subs AS a\nLEFT JOIN fx_rates AS fr\n    ON a.currency = fr.currency",
+          "error": null,
+          "failure_type": null,
+          "rows_got": 1,
+          "rows_expected": 1,
+          "error_types": [],
+          "seconds": 4.03,
+          "llm_calls": 2,
+          "input_tokens": 1806,
+          "output_tokens": 1518
+        },
+        {
+          "id": "SH17",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "cte",
+            "date_math",
+            "backlog"
+          ],
+          "question": "For each month-end of 2025, how many tickets were still open, meaning opened on or before that month-end and not closed by then? Return the month as YYYY-MM and the count in chronological order.",
+          "gold_sql": "WITH me(month, e) AS (VALUES ('2025-01','2025-01-31 23:59:59'),('2025-02','2025-02-28 23:59:59'),('2025-03','2025-03-31 23:59:59'),('2025-04','2025-04-30 23:59:59'),('2025-05','2025-05-31 23:59:59'),('2025-06','2025-06-30 23:59:59'),('2025-07','2025-07-31 23:59:59'),('2025-08','2025-08-31 23:59:59'),('2025-09','2025-09-30 23:59:59'),('2025-10','2025-10-31 23:59:59'),('2025-11','2025-11-30 23:59:59'),('2025-12','2025-12-31 23:59:59')) SELECT me.month, COUNT(t.ticket_id) FROM me LEFT JOIN tickets t ON t.opened_at <= me.e AND (t.closed_at IS NULL OR t.closed_at > me.e) GROUP BY me.month ORDER BY me.month",
+          "status": "success",
+          "correct": true,
+          "first_attempt_correct": true,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "WITH RECURSIVE months AS (\n    SELECT date('2025-01-01') AS month_start\n    UNION ALL\n    SELECT date(month_start, '+1 month')\n    FROM months\n    WHERE month_start < date('2025-12-01')\n)\nSELECT \n    strftime('%Y-%m', month_start) AS month,\n    COUNT(t.ticket_id) AS open_tickets\nFROM months\nLEFT JOIN tickets t\n    ON t.opened_at < date(month_start, '+1 month')\n   AND (t.closed_at IS NULL OR t.closed_at >= date(month_start, '+1 month'))\nGROUP BY month\nORDER BY month",
+          "error": null,
+          "failure_type": null,
+          "rows_got": 12,
+          "rows_expected": 12,
+          "error_types": [],
+          "seconds": 3.02,
+          "llm_calls": 2,
+          "input_tokens": 1566,
+          "output_tokens": 1210
+        }
+      ]
+    }
+  ]
+}

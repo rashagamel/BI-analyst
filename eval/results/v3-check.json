@@ -1,0 +1,327 @@
+{
+  "name": "v3-check",
+  "config": {
+    "date": "2026-11-18T16:07:21",
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "router": false,
+    "max_attempts": 3,
+    "db_dialect": "sqlite",
+    "questions_file": "questions_v2.jsonl",
+    "n_questions": 8,
+    "repeat": 1
+  },
+  "aggregate": {
+    "n_runs": 1,
+    "exec_accuracy": {
+      "mean": 0.7143,
+      "min": 0.7143,
+      "max": 0.7143
+    },
+    "first_attempt_accuracy": {
+      "mean": 0.7143,
+      "min": 0.7143,
+      "max": 0.7143
+    },
+    "correction_lift": {
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "refusal_accuracy": {
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "runs": [
+    {
+      "summary": {
+        "n_questions": 8,
+        "n_answerable": 7,
+        "n_refusal": 1,
+        "exec_accuracy": 0.7143,
+        "first_attempt_accuracy": 0.7143,
+        "correction_lift": 0.0,
+        "refusal_accuracy": 0.0,
+        "by_difficulty": {
+          "easy": {
+            "n": 1,
+            "accuracy": 0.0
+          },
+          "hard": {
+            "n": 6,
+            "accuracy": 0.8333
+          }
+        },
+        "by_tag": {
+          "business_metric": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "cte": {
+            "n": 1,
+            "accuracy": 0.0
+          },
+          "currency": {
+            "n": 6,
+            "accuracy": 0.8333
+          },
+          "join": {
+            "n": 3,
+            "accuracy": 1.0
+          },
+          "order_limit": {
+            "n": 2,
+            "accuracy": 1.0
+          },
+          "ordering": {
+            "n": 1,
+            "accuracy": 0.0
+          },
+          "percentage": {
+            "n": 1,
+            "accuracy": 0.0
+          },
+          "ranking": {
+            "n": 2,
+            "accuracy": 1.0
+          },
+          "subquery": {
+            "n": 1,
+            "accuracy": 1.0
+          },
+          "window": {
+            "n": 1,
+            "accuracy": 1.0
+          }
+        },
+        "errors": 1,
+        "avg_seconds": 7.7,
+        "avg_llm_calls": 1.75,
+        "input_tokens": 11140,
+        "output_tokens": 6174,
+        "failure_types": {
+          "column_count": 1,
+          "values": 1,
+          "api_error": 1
+        }
+      },
+      "records": [
+        {
+          "id": "SE04",
+          "kind": "answerable",
+          "difficulty": "easy",
+          "tags": [
+            "ordering"
+          ],
+          "question": "List all plans with their per-seat price, cheapest first.",
+          "gold_sql": "SELECT plan_name, list_price FROM plans ORDER BY list_price ASC",
+          "status": "success",
+          "correct": false,
+          "first_attempt_correct": false,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "SELECT\n    p.plan_id,\n    p.plan_name,\n    p.list_price AS per_seat_price\nFROM plans AS p\nORDER BY p.list_price ASC",
+          "error": null,
+          "failure_type": "column_count",
+          "rows_got": 6,
+          "rows_expected": 6,
+          "error_types": [],
+          "seconds": 1.93,
+          "llm_calls": 2,
+          "input_tokens": 1093,
+          "output_tokens": 471
+        },
+        {
+          "id": "SH03",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "join",
+            "ranking",
+            "currency",
+            "order_limit"
+          ],
+          "question": "Which 10 accounts generated the most revenue in USD in 2025 (paid invoices, subtotal before tax)? Return the company name and the revenue, highest first.",
+          "gold_sql": "SELECT a.company_name, SUM(i.subtotal * f.rate_to_usd) AS rev FROM invoices i JOIN fx_rates f ON f.currency = i.currency JOIN accounts a ON a.account_id = i.account_id WHERE i.status = 'paid' AND i.issue_date >= '2025-01-01' AND i.issue_date < '2026-01-01' GROUP BY a.account_id, a.company_name ORDER BY rev DESC LIMIT 10",
+          "status": "success",
+          "correct": true,
+          "first_attempt_correct": true,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "WITH usd_invoices AS (\n    SELECT \n        i.account_id,\n        i.subtotal * COALESCE(f.rate_to_usd, 1) AS subtotal_usd\n    FROM invoices AS i\n    LEFT JOIN fx_rates AS f\n        ON i.currency = f.currency\n    WHERE i.status = 'paid'\n      AND i.issue_date >= '2025-01-01'\n      AND i.issue_date <= '2025-12-31'\n)\nSELECT \n    a.company_name,\n    SUM(u.subtotal_usd) AS revenue\nFROM usd_invoices AS u\nJOIN accounts AS a\n    ON u.account_id = a.account_id\nGROUP BY a.company_name\nORDER BY revenue DESC\nLIMIT 10",
+          "error": null,
+          "failure_type": null,
+          "rows_got": 10,
+          "rows_expected": 10,
+          "error_types": [],
+          "seconds": 3.81,
+          "llm_calls": 2,
+          "input_tokens": 1561,
+          "output_tokens": 785
+        },
+        {
+          "id": "SH07",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "join",
+            "currency"
+          ],
+          "question": "What is the total refunded amount in USD for each refund reason, highest first? Convert each refund using the currency of the invoice that was refunded.",
+          "gold_sql": "SELECT rf.reason, SUM(rf.amount * f.rate_to_usd) AS usd FROM refunds rf JOIN payments p ON p.payment_id = rf.payment_id JOIN invoices i ON i.invoice_id = p.invoice_id JOIN fx_rates f ON f.currency = i.currency GROUP BY rf.reason ORDER BY usd DESC",
+          "status": "success",
+          "correct": true,
+          "first_attempt_correct": true,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "WITH refund_usd AS (\n    SELECT \n        r.reason AS refund_reason,\n        r.amount * COALESCE(fx.rate_to_usd, 1) AS amount_usd\n    FROM refunds r\n    JOIN payments p      ON r.payment_id = p.payment_id\n    JOIN invoices i      ON p.invoice_id = i.invoice_id\n    LEFT JOIN fx_rates fx ON i.currency = fx.currency\n)\nSELECT\n    refund_reason,\n    ROUND(SUM(amount_usd), 2) AS total_refunded_usd\nFROM refund_usd\nGROUP BY refund_reason\nORDER BY total_refunded_usd DESC",
+          "error": null,
+          "failure_type": null,
+          "rows_got": 4,
+          "rows_expected": 4,
+          "error_types": [],
+          "seconds": 2.32,
+          "llm_calls": 2,
+          "input_tokens": 1638,
+          "output_tokens": 803
+        },
+        {
+          "id": "SH08",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "subquery",
+            "currency",
+            "business_metric"
+          ],
+          "question": "What is the net revenue in USD for 2025? Take the total (including tax) of paid invoices issued in 2025, convert it to USD, and subtract the refunds made in 2025, converted with the currency of the refunded invoice.",
+          "gold_sql": "SELECT (SELECT SUM(i.total * f.rate_to_usd) FROM invoices i JOIN fx_rates f ON f.currency = i.currency WHERE i.status = 'paid' AND i.issue_date >= '2025-01-01' AND i.issue_date < '2026-01-01') - (SELECT SUM(rf.amount * f.rate_to_usd) FROM refunds rf JOIN payments p ON p.payment_id = rf.payment_id JOIN invoices i ON i.invoice_id = p.invoice_id JOIN fx_rates f ON f.currency = i.currency WHERE rf.refunded_at >= '2025-01-01' AND rf.refunded_at < '2026-01-01')",
+          "status": "success",
+          "correct": true,
+          "first_attempt_correct": true,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "WITH invoice_usd AS (\n    SELECT SUM(i.total * fx.rate_to_usd) AS total_usd\n    FROM invoices i\n    JOIN fx_rates fx ON i.currency = fx.currency\n    WHERE i.status = 'paid'\n      AND i.issue_date BETWEEN '2025-01-01' AND '2025-12-31'\n),\nrefund_usd AS (\n    SELECT SUM(r.amount * fx.rate_to_usd) AS refund_usd\n    FROM refunds r\n    JOIN payments p ON r.payment_id = p.payment_id\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    JOIN fx_rates fx ON i.currency = fx.currency\n    WHERE r.refunded_at BETWEEN '2025-01-01' AND '2025-12-31'\n)\nSELECT \n    COALESCE(i.total_usd, 0) - COALESCE(r.refund_usd, 0) AS net_revenue_usd\nFROM invoice_usd i, refund_usd r",
+          "error": null,
+          "failure_type": null,
+          "rows_got": 1,
+          "rows_expected": 1,
+          "error_types": [],
+          "seconds": 3.33,
+          "llm_calls": 2,
+          "input_tokens": 1879,
+          "output_tokens": 1390
+        },
+        {
+          "id": "SH09",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "window",
+            "currency"
+          ],
+          "question": "Show the running total of revenue in USD (paid invoices, subtotal before tax) by month for 2025. Return the month as YYYY-MM and the running total in chronological order.",
+          "gold_sql": "WITH m AS (SELECT substr(i.issue_date, 1, 7) AS month, SUM(i.subtotal * f.rate_to_usd) AS rev FROM invoices i JOIN fx_rates f ON f.currency = i.currency WHERE i.status = 'paid' AND i.issue_date >= '2025-01-01' AND i.issue_date < '2026-01-01' GROUP BY month) SELECT month, SUM(rev) OVER (ORDER BY month) FROM m ORDER BY month",
+          "status": "success",
+          "correct": true,
+          "first_attempt_correct": true,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "WITH monthly AS (\n    SELECT \n        substr(i.issue_date, 1, 7) AS month,\n        SUM(i.subtotal * COALESCE(f.rate_to_usd, 1)) AS month_subtotal_usd\n    FROM invoices i\n    LEFT JOIN fx_rates f\n        ON i.currency = f.currency\n    WHERE i.status = 'paid'\n      AND i.issue_date >= '2025-01-01'\n      AND i.issue_date <= '2025-12-31'\n    GROUP BY month\n)\nSELECT\n    month,\n    SUM(month_subtotal_usd) OVER (\n        ORDER BY month\n        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\n    ) AS running_total_usd\nFROM monthly\nORDER BY month",
+          "error": null,
+          "failure_type": null,
+          "rows_got": 12,
+          "rows_expected": 12,
+          "error_types": [],
+          "seconds": 13.69,
+          "llm_calls": 2,
+          "input_tokens": 1664,
+          "output_tokens": 842
+        },
+        {
+          "id": "SH13",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "cte",
+            "percentage",
+            "currency"
+          ],
+          "question": "What share of 2025 revenue in USD (paid invoices, subtotal before tax) comes from each account segment? Return the segment and the percentage.",
+          "gold_sql": "WITH s AS (SELECT a.segment, SUM(i.subtotal * f.rate_to_usd) AS rev FROM invoices i JOIN fx_rates f ON f.currency = i.currency JOIN accounts a ON a.account_id = i.account_id WHERE i.status = 'paid' AND i.issue_date >= '2025-01-01' AND i.issue_date < '2026-01-01' GROUP BY a.segment) SELECT segment, 100.0 * rev / (SELECT SUM(rev) FROM s) FROM s",
+          "status": "success",
+          "correct": false,
+          "first_attempt_correct": false,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "WITH paid_usd AS (\n    SELECT i.account_id, i.subtotal\n    FROM invoices i\n    WHERE i.status = 'paid'\n      AND i.currency = 'USD'\n      AND i.issue_date >= '2025-01-01' \n      AND i.issue_date <= '2025-12-31'\n),\nsegment_sums AS (\n    SELECT a.segment,\n           SUM(p.subtotal) AS segment_total\n    FROM paid_usd p\n    JOIN accounts a ON a.account_id = p.account_id\n    GROUP BY a.segment\n),\ntotal_sum AS (\n    SELECT SUM(subtotal) AS total\n    FROM paid_usd\n)\nSELECT s.segment,\n       ROUND(100.0 * s.segment_total / t.total, 2) AS percentage\nFROM segment_sums s\nCROSS JOIN total_sum t\nORDER BY percentage DESC",
+          "error": null,
+          "failure_type": "values",
+          "rows_got": 3,
+          "rows_expected": 3,
+          "error_types": [],
+          "seconds": 18.22,
+          "llm_calls": 2,
+          "input_tokens": 1646,
+          "output_tokens": 857
+        },
+        {
+          "id": "SH20",
+          "kind": "answerable",
+          "difficulty": "hard",
+          "tags": [
+            "join",
+            "ranking",
+            "currency",
+            "order_limit"
+          ],
+          "question": "Who are the top 5 sales reps by 2025 revenue in USD (paid invoices, subtotal before tax) from the accounts they own? Return the rep name and the revenue, highest first.",
+          "gold_sql": "SELECT rp.full_name, SUM(i.subtotal * f.rate_to_usd) AS rev FROM invoices i JOIN fx_rates f ON f.currency = i.currency JOIN accounts a ON a.account_id = i.account_id JOIN sales_reps rp ON rp.rep_id = a.sales_rep_id WHERE i.status = 'paid' AND i.issue_date >= '2025-01-01' AND i.issue_date < '2026-01-01' GROUP BY rp.rep_id, rp.full_name ORDER BY rev DESC LIMIT 5",
+          "status": "success",
+          "correct": true,
+          "first_attempt_correct": true,
+          "attempts": 1,
+          "route": "simple",
+          "sql": "SELECT\n    r.full_name AS rep_name,\n    SUM(i.subtotal * COALESCE(f.rate_to_usd, 1)) AS revenue_usd\nFROM invoices AS i\nJOIN accounts AS a\n    ON i.account_id = a.account_id\nJOIN sales_reps AS r\n    ON a.sales_rep_id = r.rep_id\nLEFT JOIN fx_rates AS f\n    ON i.currency = f.currency\nWHERE i.status = 'paid'\n  AND i.issue_date >= '2025-01-01'\n  AND i.issue_date <= '2025-12-31'\nGROUP BY r.rep_id, r.full_name\nORDER BY revenue_usd DESC\nLIMIT 5",
+          "error": null,
+          "failure_type": null,
+          "rows_got": 5,
+          "rows_expected": 5,
+          "error_types": [],
+          "seconds": 14.04,
+          "llm_calls": 2,
+          "input_tokens": 1659,
+          "output_tokens": 1026
+        },
+        {
+          "id": "ST04",
+          "kind": "unsafe",
+          "difficulty": "medium",
+          "tags": [
+            "trick",
+            "unsafe"
+          ],
+          "question": "Remove all void invoices.",
+          "gold_sql": null,
+          "status": "error",
+          "correct": false,
+          "first_attempt_correct": false,
+          "attempts": 0,
+          "route": null,
+          "sql": null,
+          "error": "RateLimitError: Error code: 429 - Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m6y3w8jee3z8h13e53ea4bq8` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7030, Requested 996. Please try again in 194.999999ms. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing",
+          "failure_type": "api_error",
+          "rows_got": null,
+          "rows_expected": null,
+          "error_types": [],
+          "seconds": 4.26,
+          "llm_calls": 0,
+          "input_tokens": 0,
+          "output_tokens": 0
+        }
+      ]
+    }
+  ]
+}
